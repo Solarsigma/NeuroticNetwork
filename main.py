@@ -10,7 +10,40 @@ TANH = 'tanh'
 IDENTITY = 'identity'
 STEP = 'step'
 SIGMOID = 'sigmoid'
+GELU = 'gelu'
+SWISH = 'swish'
+ELU = 'elu'
+SOFTPLUS = 'softplus'
+SOFTMAX = 'softmax'
 MSE = 'mse'
+HUBER = 'huber'
+BINARY_CE = 'binary-cross-entropy'
+CATEGORICAL_CE = 'categorical-cross-entropy'
+
+
+def _sigmoid_(l):
+    return 1 / (1 + np.exp(-l))
+
+def _tanh_d_(l):
+    return 1 - np.tanh(l)**2
+
+def _softmax_(l):
+    return np.exp(l) / np.sum(np.exp(l), axis=0)
+
+def _softmax_d_(l):
+    s = _softmax_(l)
+    return diagflat(s) - self_product(s)
+
+
+def diagflat(arr):
+    if len(arr.shape) == 2:
+        return np.dstack([np.diagflat(col) for col in arr.T])
+    return np.diagflat(arr)
+
+
+def self_product(arr):
+    return np.dstack([np.matmul(np.atleast_2d(col).T, np.atleast_2d(col)) for col in arr.T])
+        
 
 
 def activation_fn(fn_name):
@@ -23,33 +56,65 @@ def activation_fn(fn_name):
     if fn_name == STEP:
         return lambda l: np.where(l > 0, 1, 0)
     if fn_name == SIGMOID:
-        return lambda l: 1 / (1 + np.exp(-l))
+        return lambda l: _sigmoid_(l)
+    if fn_name == GELU:
+        return lambda l: 0.5*l * (1 + np.tanh(np.sqrt(2/np.pi) * (l + 0.044715*(l**3))))
+    if fn_name == SWISH:
+        return lambda l, beta=1: l * _sigmoid_(beta * l)
+    if fn_name == ELU:
+        return lambda l, alpha=1: np.where(l > 0, l, alpha*(np.exp(l) - 1))
+    if fn_name == SOFTPLUS:
+        return lambda l: np.log(1 + np.exp(l))
+    if fn_name == SOFTMAX:
+        return lambda l: _softmax_(l)
     return lambda l: l
 
 
 def activation_fn_derivative(fn_name):
     if fn_name == RELU:
-        return lambda l: np.heaviside(l, 0)
+        return lambda l: diagflat(np.heaviside(l, 0))
     if fn_name == TANH:
-        return lambda l: 1 - np.tanh(l)**2
+        return lambda l: diagflat(_tanh_d_(l))
     if fn_name == LEAKY_RELU:
-        return lambda l, alpha=0.01: np.where(l < 0, alpha, 1)
+        return lambda l, alpha=0.01: diagflat(np.where(l < 0, alpha, 1))
     if fn_name == STEP:
-        return lambda l: np.zeros_like(l)
+        return lambda l: diagflat(np.zeros_like(l))
     if fn_name == SIGMOID:
-        return lambda l: np.exp(-l) / ((1 + np.exp(-l)) ** 2)
-    return lambda l: np.ones_like(l)
+        return lambda l: diagflat(_sigmoid_(l) * (1 - _sigmoid_(l)))
+    if fn_name == GELU:
+        return lambda l: diagflat(0.5*l * (1 + (_tanh_d_(np.sqrt(2/np.pi) * (l + 0.044715*(l**3))) * np.sqrt(2/np.pi) * (1 + 3*0.044715*(l**2)))))
+    if fn_name == SWISH:
+        return lambda l, beta=1: diagflat(_sigmoid_(beta*l) + beta*l * _sigmoid_(beta*l) * (1 - _sigmoid_(beta*l)))
+    if fn_name == ELU:
+        return lambda l, alpha=1: diagflat(np.where(l > 0, 1, alpha*np.exp(l)))
+    if fn_name == SOFTPLUS:
+        return lambda l: diagflat(np.exp(l) / (1 + np.exp(l)))
+    if fn_name == SOFTMAX:
+        return lambda l: _softmax_d_(l)
+    return lambda l: diagflat(np.ones_like(l))
 
 
 def loss_fn(fn_name):
     if fn_name == MSE:
-        return lambda y_true, y_pred: (y_pred - y_true)**2
-    return lambda y_true, y_pred: (y_pred - y_true)
+        return lambda y_true, y_pred: np.sum((y_pred - y_true)**2, axis=0)
+    if fn_name == HUBER:
+        return lambda y_true, y_pred, delta=1: np.sum(np.where(np.abs(y_pred - y_true) < delta, ((y_pred - y_true)**2)/2, delta*(y_pred - y_true - delta/2)), axis=0)
+    if fn_name == BINARY_CE:
+        return lambda y_true, y_pred: np.sum(-(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred)), axis=0)
+    if fn_name == CATEGORICAL_CE:
+        return lambda y_true, y_pred: -np.sum(y_true * np.log(y_pred), axis=0)
+    return lambda y_true, y_pred: np.sum(y_pred - y_true, axis=0)
 
 
 def loss_fn_gradient(fn_name):
     if fn_name == MSE:
         return lambda y_true, y_pred: 2*(y_pred - y_true)
+    if fn_name == HUBER:
+        return lambda y_true, y_pred, delta=1: np.where(np.abs(y_pred - y_true) < delta, (y_pred - y_true), delta*np.ones_like(y_pred))
+    if fn_name == BINARY_CE:
+        return lambda y_true, y_pred: -(y_true / y_pred - (1 - y_true) / (1 - y_pred))
+    if fn_name == CATEGORICAL_CE:
+        return lambda y_true, y_pred: - y_true / y_pred
     return lambda y_true, y_pred: np.ones_like(y_pred)
 
 
@@ -106,21 +171,23 @@ class NeuroticNetwork:
     def train(self, x, y, verbose=False):
         self.loss_history = []
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1)
-        loss = epoch_num = 1
-        while (np.abs(np.sum(loss)) > self.tolerance and epoch_num < self.max_epochs):
+        epoch_num = 1
+        abs_loss_val = max(self.tolerance, 1)
+        while (np.abs(abs_loss_val) > self.tolerance and epoch_num < self.max_epochs):
             print(f"Epoch Number {epoch_num}")
             if verbose:
                 print("Weights:")
                 pprint(self.weights)
             pre_activation_computes, post_activation_computes = self.__forward_compute__(x_train)
             loss = loss_fn(self.loss_fn)(y_train.T, post_activation_computes[-1])
+            abs_loss_val = np.sum(loss)/x.shape[-1]
             if verbose:
-                print(f"Loss: {np.sum(loss)}")
+                print(f"Loss: {abs_loss_val}")
             self.__back_propogate__(y_train.T, pre_activation_computes, post_activation_computes)
-            self.loss_history.append(np.sum(loss))
+            self.loss_history.append(abs_loss_val)
             epoch_num += 1
-        
-        print(f"Validation Loss = {np.sum(loss_fn(self.loss_fn)(y_test.T, self.predict(x_test)))}")
+        val_loss = loss_fn(self.loss_fn)(y_test.T, self.predict(x_test))
+        print(f"Validation Loss = {np.sum(val_loss)/x_test.shape[1]}")
         print("Final Weights: ")
         pprint(self.weights)
     
@@ -135,14 +202,18 @@ class NeuroticNetwork:
     
 
     def __back_propogate__(self, y_true, pre_activation_computed_values, post_activation_computed_values):
-        loss_gradient = activation_fn_derivative(self.layers[-1]['activation_fn'])(pre_activation_computed_values[-1]) * loss_fn_gradient(self.loss_fn)(y_true, post_activation_computed_values[-1])
+        activation_fn_d = activation_fn_derivative(self.layers[-1]['activation_fn'])(pre_activation_computed_values[-1])
+        loss_fn_grad = np.atleast_3d(loss_fn_gradient(self.loss_fn)(y_true, post_activation_computed_values[-1]).T)
+        loss_gradient = np.reshape((activation_fn_d.T @ loss_fn_grad), loss_fn_grad.shape[:-1]).T
         for i in range(len(self.layers) - 1, -1, -1):
             prev_layer = self.layers[i-1]
             activated_layer_input = post_activation_computed_values[i]
             layer_input = pre_activation_computed_values[i]
             delta_weight = self.learning_rate * loss_gradient @ self.__pad_ones__(activated_layer_input).T
             if i > 0:
-                loss_gradient = activation_fn_derivative(prev_layer['activation_fn'])(layer_input) * (self.weights[i][:, :-1].T @ loss_gradient)
+                activation_fn_d = activation_fn_derivative(prev_layer['activation_fn'])(layer_input)
+                loss_fn_grad = np.atleast_3d((self.weights[i][:, :-1].T @ loss_gradient).T)
+                loss_gradient =  np.reshape((activation_fn_d.T @ loss_fn_grad), loss_fn_grad.shape[:-1]).T
             self.weights[i] -= delta_weight
     
 
@@ -211,5 +282,5 @@ def run_classification_sanity():
     plt.scatter(x_test_scaled[:, 0], x_test_scaled[:, 1], c=colors)
     plt.show(block=True)
 
-# run_regression_sanity()
+run_regression_sanity()
 run_classification_sanity()
