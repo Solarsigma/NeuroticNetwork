@@ -5,7 +5,7 @@ from model.NeuroticNetwork import NeuroticNetwork
 from model.math import Loss, Activation
 
 def run_regression_sanity():
-    nn = NeuroticNetwork(layer_structure=[3, 3], inputs=1, learning_rate=8e-5, loss_fn=Loss.MSE.value, activation_fn=Activation.LEAKY_RELU.value, max_epochs=5000)
+    nn = NeuroticNetwork(layer_structure=[3, 3], inputs=1, learning_rate=8e-5, loss_fn=Loss.MSE.value, activation_fn=Activation.LEAKY_RELU.value, max_epochs=5000, tolerance=1e-2)
     x = np.arange(0, 100, 0.1)
     x = x.reshape(x.shape[0], 1)
     scaler = StandardScaler().fit(x)
@@ -29,7 +29,7 @@ def run_regression_sanity():
 
 
 def run_classification_sanity():
-    nn = NeuroticNetwork(layer_structure=[2, 5, 3], inputs=2, learning_rate=1e-3, loss_fn=Loss.MSE.value, activation_fn=Activation.SIGMOID.value, max_epochs=5000)
+    nn = NeuroticNetwork(layer_structure=[2, 5, 3], inputs=2, learning_rate=1e-3, loss_fn=Loss.MSE.value, activation_fn=Activation.SIGMOID.value, max_epochs=5000, tolerance=1e-2)
 
     x = np.array([[x, y] for y in range(0, 100, 5) for x in range(0, 100, 5)])
     y = np.array([1 if coord[1] >= 0.036*((coord[0] - 50)**2) + 10 else 0 for coord in x])
