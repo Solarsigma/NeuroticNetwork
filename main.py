@@ -1,7 +1,5 @@
 import numpy as np
-from pprint import pprint
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from model.NeuroticNetwork import NeuroticNetwork
 from model.math import Loss, Activation
