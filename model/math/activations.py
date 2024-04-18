@@ -14,7 +14,15 @@ class Activation(util.CustomEnum):
     SOFTPLUS = 'softplus'
     SOFTMAX = 'softmax'
 
-    def compute(self, l, **kwargs):
+    def __init__(self, value):
+        self._value_ = value
+        self.params = {}
+
+    def set_params(self, **hyperparams):
+        self.params = hyperparams
+        return self
+
+    def compute(self, l):
         match self:
             case Activation.RELU:
                 return np.maximum(0, l)
@@ -23,7 +31,7 @@ class Activation(util.CustomEnum):
             case Activation.TANH:
                 return np.tanh(l)
             case Activation.LEAKY_RELU:
-                alpha = kwargs.get('alpha', 0.01)
+                alpha = self.params.get('alpha', 0.01)
                 return np.maximum(alpha * l, l)
             case Activation.STEP:
                 return np.where(l > 0, 1, 0)
@@ -32,10 +40,10 @@ class Activation(util.CustomEnum):
             case Activation.GELU:
                 return 0.5*l * (1 + np.tanh(np.sqrt(2/np.pi) * (l + 0.044715*(l**3))))
             case Activation.SWISH:
-                beta = kwargs.get('beta', 1)
+                beta = self.params.get('beta', 1)
                 return l * util._sigmoid_(beta * l)
             case Activation.ELU:
-                alpha = kwargs.get('alpha', 1)
+                alpha = self.params.get('alpha', 1)
                 return np.where(l > 0, l, alpha*(np.exp(l) - 1))
             case Activation.SOFTPLUS:
                 return np.log(1 + np.exp(l))
@@ -44,14 +52,14 @@ class Activation(util.CustomEnum):
             case _:
                 return l
     
-    def gradient(self, l, **kwargs):
+    def gradient(self, l):
         match self:
             case Activation.RELU:
                 return util.diagflat(np.heaviside(l, 0))
             case Activation.TANH:
                 return util.diagflat(util._tanh_d_(l))
             case Activation.LEAKY_RELU:
-                alpha = kwargs.get('alpha', 0.01)
+                alpha = self.params.get('alpha', 0.01)
                 return util.diagflat(np.where(l < 0, alpha, 1))
             case Activation.STEP:
                 return util.diagflat(np.zeros_like(l))
@@ -60,10 +68,10 @@ class Activation(util.CustomEnum):
             case Activation.GELU:
                 return util.diagflat(0.5*l * (1 + (util._tanh_d_(np.sqrt(2/np.pi) * (l + 0.044715*(l**3))) * np.sqrt(2/np.pi) * (1 + 3*0.044715*(l**2)))))
             case Activation.SWISH:
-                beta = kwargs.get('beta', 1)
+                beta = self.params.get('beta', 1)
                 return util.diagflat(util._sigmoid_(beta*l) + beta*l * util._sigmoid_(beta*l) * (1 - util._sigmoid_(beta*l)))
             case Activation.ELU:
-                alpha = kwargs.get('alpha', 1)
+                alpha = self.params.get('alpha', 1)
                 return util.diagflat(np.where(l > 0, 1, alpha*np.exp(l)))
             case Activation.SOFTPLUS:
                 return util.diagflat(np.exp(l) / (1 + np.exp(l)))
