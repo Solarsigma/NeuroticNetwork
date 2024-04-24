@@ -11,6 +11,8 @@ from sklearn.neural_network import MLPRegressor
 import matplotlib.pyplot as plt
 from model.NeuroticNetwork import NeuroticNetwork
 from model.math.score import score
+from sklearn.metrics import r2_score, explained_variance_score, mean_squared_error
+from tabulate import tabulate
 
 def reg_benchmark():
 
@@ -69,18 +71,22 @@ def reg_benchmark():
     custom_nn.train(x_train_fin, y_train)
     custom_nn.plot_loss_history()
     plt.show()
-    y_pred_custom = custom_nn.predict(x_test_fin)
+    y_pred_custom = custom_nn.predict(x_test_fin)\
 
+    print("\n\nComparison report")
+    print("".join(["="]*40))
 
-    print("Final rmse loss, sklearn: ")
-    print((np.sqrt(np.sum((y_pred_sklearn - y_test)**2)) / y_test.shape[0]))
-    print("Final rmse loss, custom:")
-    print((np.sqrt(np.sum((y_pred_custom - y_test)**2)) / y_test.shape[0]))
+    headers = ['Metric', 'Scikit-Learn NN', 'NeuroticNetwork']
+    metrics_to_eval = {'R2 Score': r2_score, 'Root Mean Squared Error': mean_squared_error, 'Explained Variance Score': explained_variance_score}
+    scores = []
+    for metric in metrics_to_eval:
+        score = [metric]
+        score.append(metrics_to_eval[metric](y_pred_sklearn, y_test))
+        score.append(metrics_to_eval[metric](y_pred_custom, y_test))
+        scores.append(score)
 
-    print("Final R2 score, sklearn:")
-    print(score(y_pred_sklearn, y_test))
-    print("Final R2 score, custom:")
-    print(score(y_pred_custom, y_test))
+    print(tabulate(scores, headers=headers))
+
 
 
 
