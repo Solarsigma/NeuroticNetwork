@@ -1,2 +1,2 @@
-from .activations import Activation
-from .losses import Loss
+from .activation import Activation
+from .loss import Loss

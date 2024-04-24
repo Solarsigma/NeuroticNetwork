@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from model.NeuroticNetwork import NeuroticNetwork
 from model.math import Loss, Activation
+from benchmarking.main import reg_benchmark
 
 def run_regression_sanity():
     nn = NeuroticNetwork(layer_structure=[3, 3], inputs=1, learning_rate=8e-5, loss_fn=Loss.MSE.value, activation_fn=Activation.LEAKY_RELU.value, activation_params={'alpha':0.02}, max_epochs=5000, tolerance=1e-2)
@@ -58,5 +59,6 @@ def run_classification_sanity():
     plt.scatter(x_test_scaled[:, 0], x_test_scaled[:, 1], c=colors)
     plt.show(block=True)
 
-run_regression_sanity()
-run_classification_sanity()
+# run_regression_sanity()
+# run_classification_sanity()
+reg_benchmark()

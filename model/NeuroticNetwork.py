@@ -68,19 +68,19 @@ class NeuroticNetwork:
         epoch_num = 1
         abs_loss_val = max(self.tolerance, 1)
         while (np.abs(abs_loss_val) > self.tolerance and epoch_num < self.max_epochs):
-            print(f"Epoch Number {epoch_num}")
             if verbose:
+                print(f"Epoch Number {epoch_num}")
                 print("Weights:")
                 pprint(self.weights)
             pre_activation_computes, post_activation_computes = self.__forward_compute__(x_train)
-            loss = self.loss_fn.compute(y_train.T, post_activation_computes[-1])
+            loss = self.loss_fn.compute(np.atleast_2d(y_train).T, post_activation_computes[-1])
             abs_loss_val = np.sum(loss)/x.shape[0]
             if verbose:
                 print(f"Loss: {abs_loss_val}")
             self.__back_propogate__(y_train.T, pre_activation_computes, post_activation_computes)
             self.loss_history.append(abs_loss_val)
             epoch_num += 1
-        val_loss = self.loss_fn.compute(y_test.T, self.predict(x_test))
+        val_loss = self.loss_fn.compute(np.atleast_2d(y_test).T, self.predict(x_test))
         print(f"Validation Loss = {np.sum(val_loss)/x_test.shape[0]}")
         print("Final Weights: ")
         pprint(self.weights)
@@ -88,7 +88,7 @@ class NeuroticNetwork:
 
     def predict(self, x):
         _, final_computes = self.__forward_compute__(x)
-        return final_computes[-1]
+        return np.squeeze(final_computes[-1].T)
     
 
     def __pad_ones__(self, x):
@@ -97,7 +97,7 @@ class NeuroticNetwork:
 
     def __back_propogate__(self, y_true, pre_activation_computed_values, post_activation_computed_values):
         activation_fn_d = self.layers[-1]['activation_fn'].gradient(pre_activation_computed_values[-1])
-        loss_fn_grad = np.atleast_3d(self.loss_fn.gradient(y_true, post_activation_computed_values[-1]).T)
+        loss_fn_grad = np.atleast_3d(self.loss_fn.gradient(np.atleast_2d(y_true), post_activation_computed_values[-1]).T)
         loss_gradient = np.reshape((activation_fn_d.T @ loss_fn_grad), loss_fn_grad.shape[:-1]).T
         for i in range(len(self.layers) - 1, -1, -1):
             prev_layer = self.layers[i-1]
