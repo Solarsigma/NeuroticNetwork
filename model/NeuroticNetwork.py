@@ -14,6 +14,7 @@ class NeuroticNetwork:
         self.learning_rate = learning_rate
         self.tolerance = tolerance
         self.max_epochs = max_epochs
+        self.train_loss = -1
         self.__init_layers__(layer_structure, no_of_nodes_per_layer, activation_fn, activation_params)
         self.__init_weights__()
 
@@ -82,6 +83,7 @@ class NeuroticNetwork:
             epoch_num += 1
         val_loss = self.loss_fn.compute(np.atleast_2d(y_test).T, self.predict(x_test))
         print(f"Validation Loss = {np.sum(val_loss)/x_test.shape[0]}")
+        self.train_loss = np.sum(val_loss)/x_test.shape[0]
         print("Final Weights: ")
         pprint(self.weights)
     
@@ -120,3 +122,7 @@ class NeuroticNetwork:
         plt.plot(self.loss_history, color='red')
         plt.title("Loss vs Epoch Num")
         plt.show(block=False)
+    
+
+    def get_train_loss(self):
+        return self.train_loss
